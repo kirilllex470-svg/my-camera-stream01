@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Просмотр трансляции</title>
+    <style>
+        body { font-family: Arial; text-align: center; background: #111; color: white; padding: 20px; }
+        video { width: 640px; height: 480px; background: #000; border-radius: 8px; margin-top: 20px; border: 2px solid #333; }
+        textarea { width: 90%; height: 100px; background: #333; color: #00ff00; border: 1px solid #555; padding: 10px; margin-top: 10px; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #00ff00; border: none; border-radius: 5px; font-weight: bold; margin-top: 10px; }
+        .step { background: #222; padding: 15px; margin: 15px auto; max-width: 700px; border-radius: 8px; text-align: left; }
+    </style>
+</head>
+<body>
+
+    <h1>Подключение к трансляции</h1>
+
+    <div class="step">
+        <label><strong>Шаг 1:</strong> Вставьте длинный код, который вам прислал стример:</label>
+        <textarea id="offerCode" placeholder="Вставьте код сюда..."></textarea>
+        <button onclick="connectToStream()">Подключиться к камере</button>
+    </div>
+
+    <div class="step" id="answerBox" style="display:none;">
+        <label><strong>Шаг 2:</strong> Скопируйте этот ответный код и отправьте его обратно стримеру:</label>
+        <textarea id="answerCode" readonly onclick="this.select()"></textarea>
+    </div>
+
+    <video id="remote-video" autoplay playsinline controls></video>
+
+    <script>
+        const pc = new RTCPeerConnection();
+
+        // Когда от стримера прилетает видео/аудио поток, выводим его в тег <video>
+        pc.ontrack = (event) => {
+            const remoteVideo = document.getElementById('remote-video');
+            if (!remoteVideo.srcObject) {
+                remoteVideo.srcObject = event.streams[0];
+            }
+        };
+
+        async function connectToStream() {
+            const offerText = document.getElementById('offerCode').value.trim();
+            if (!offerText) return alert("Пожалуйста, вставьте код!");
+
+            try {
+                // Декодируем полученный текст обратно в настройки WebRTC
+                const offerDesc = JSON.parse(atob(offerText));
+                await pc.setRemoteDescription(new RTCSessionDescription(offerDesc));
+
+                // Создаем ответный код (Answer)
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+
+                // Ждем секунду и показываем ответный код
+                setTimeout(() => {
+                    const base64Answer = btoa(JSON.stringify(pc.localDescription));
+                    document.getElementById('answerCode').value = base64Answer;
+                    document.getElementById('answerBox').style.display = 'block';
+                }, 1000);
+
+            } catch (err) {
+                alert("Ошибка при чтении кода: " + err.message);
+            }
+        }
+    </script>
+
+</body>
+</html>
