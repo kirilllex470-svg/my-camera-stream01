@@ -2,55 +2,61 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Просмотр Трансляции</title>
+    <title>Просмотр стрима</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; background: #111; color: white; padding: 0; margin: 0; }
-        h1 { margin-top: 20px; font-size: 24px; color: #00bcff; }
-        .info { font-size: 16px; background: #222; padding: 10px; border-radius: 5px; display: inline-block; margin-top: 10px; }
-        #meet-box { width: 100%; height: 80vh; margin-top: 15px; background: #000; }
+        body { font-family: Arial, sans-serif; text-align: center; background: #111; color: white; padding: 20px; }
+        video { width: 640px; height: 480px; background: #000; border-radius: 8px; margin-top: 20px; border: 2px solid #333; }
+        textarea { width: 95%; height: 35px; background: #333; color: #00ff00; border: 1px solid #555; padding: 8px; font-size: 14px; resize: none; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #00ff00; border: none; border-radius: 5px; font-weight: bold; margin-top: 10px; color: black; }
+        .step { background: #222; padding: 15px; margin: 15px auto; max-width: 600px; border-radius: 8px; text-align: left; }
     </style>
 </head>
 <body>
 
-    <h1>Прямой эфир друга</h1>
-    <div class="info">Режим просмотра. Вы просто смотрите трансляцию.</div>
-    
-    <!-- Сюда встроится экран трансляции -->
-    <div id="meet-box"></div>
+    <h1>Подключение к трансляции</h1>
 
-    <!-- Загружаем официальный скрипт Jitsi -->
-    <script src="https://jit.si"></script>
+    <div class="step">
+        <label><strong>Шаг 1:</strong> Вставьте маленький код от стримера:</label>
+        <textarea id="offerCode" placeholder="Вставьте код сюда..."></textarea>
+        <button onclick="connectToStream()">Создать ответ</button>
+    </div>
+
+    <div class="step" id="answerBox" style="display:none;">
+        <label><strong>Шаг 2:</strong> Скопируйте этот короткий ответ и отправьте стримеру:</label>
+        <textarea id="answerCode" readonly onclick="this.select()"></textarea>
+    </div>
+
+    <video id="remote-video" autoplay playsinline controls></video>
+
     <script>
-        window.onload = function() {
-            // ВАЖНО: Название комнаты должно БЫТЬ ОДИНАКОВЫМ с файлом streamer.html!
-            const MY_SECRET_ROOM = "my-private-camera-room-2026"; 
+        const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:://google.com' }] });
+        
+        pc.ontrack = (e) => {
+            document.getElementById('remote-video').srcObject = e.streams[0];
+        };
 
-            const options = {
-                roomName: MY_SECRET_ROOM,
-                width: '100%',
-                height: '100%',
-                parentNode: document.querySelector('#meet-box'),
-                lang: 'ru',
-                configOverwrite: {
-                    // Принудительно ВЫКЛЮЧАЕМ камеру и микрофон у зрителя при входе
-                    startWithAudioMuted: true,
-                    startWithVideoMuted: true,
-                    constraints: {
-                        video: {
-                            mandatory: {
-                                disableVideo: true // Зритель физически не может включить камеру
-                            }
-                        }
-                    }
-                },
-                interfaceConfigOverwrite: {
-                    // Убираем у друзей вообще все кнопки управления, оставляем только "на весь экран"
-                    TOOLBAR_BUTTONS: ['fullscreen']
+        async function connectToStream() {
+            const text = document.getElementById('offerCode').value.trim();
+            if (!text) return alert("Вставьте код!");
+            
+            const [ufrag, pwd] = text.split('_');
+            const sdp = `v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\na=ice-ufrag:${ufrag}\r\na=ice-pwd:${pwd}\r\nm=video 9 RTP/AVP 96\r\nc=IN IP4 0.0.0.0\r\na=rtpmap:96 H264/90000\r\n`;
+            
+            await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: sdp }));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            
+            pc.onicecandidate = (e) => {
+                if (!e.candidate) {
+                    const lines = pc.localDescription.sdp.split('\r\n');
+                    const aufrag = lines.find(l => l.startsWith('a=ice-ufrag:')).split(':')[1];
+                    const apwd = lines.find(l => l.startsWith('a=ice-pwd:')).split(':')[1];
+                    
+                    document.getElementById('answerCode').value = `${aufrag}_${apwd}`;
+                    document.getElementById('answerBox').style.display = 'block';
                 }
             };
-            // Подключаем зрителя
-            new JitsiMeetExternalAPI("meet.jit.si", options);
-        };
+        }
     </script>
 </body>
 </html>
