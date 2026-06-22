@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Просмотр трансляции</title>
+    <title>Просмотр трансляции (Фикс rtcp-mux)</title>
     <style>
         body { font-family: Arial; text-align: center; background: #111; color: white; padding: 20px; }
         video { width: 100%; max-width: 800px; background: #000; border-radius: 8px; border: 2px solid #333; margin-top: 15px; }
@@ -32,12 +32,11 @@
         let pc;
 
         function compress(sdp) {
-            let fields = { ufrag: '', pwd: '', fp: '', ssrc: '' };
+            let fields = { ufrag: '', pwd: '', fp: ' ' };
             sdp.split('\r\n').forEach(line => {
                 if (line.startsWith('a=ice-ufrag:')) fields.ufrag = line.split(':')[1];
                 if (line.startsWith('a=ice-pwd:')) fields.pwd = line.split(':')[1];
                 if (line.startsWith('a=fingerprint:sha-256 ')) fields.fp = line.split('sha-256 ')[1];
-                if (line.startsWith('a=ssrc:') && line.includes('cname:')) fields.ssrc = line.split(' ')[0].split(':')[1];
             });
             return btoa(JSON.stringify(fields));
         }
@@ -47,7 +46,7 @@
             let setup = isAnswer ? 'active' : 'actpass';
             return {
                 type: isAnswer ? 'answer' : 'offer',
-                sdp: `v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\na=msid-semantic: WMS\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\nc=IN IP4 0.0.0.0\r\na=rtpmap:96 VP8/90000\r\na=setup:${setup}\r\na=mid:0\r\na=ice-ufrag:${d.ufrag}\r\na=ice-pwd:${d.pwd}\r\na=fingerprint:sha-256 ${d.fp}\r\n` + (d.ssrc ? `a=ssrc:${d.ssrc} cname:stream\r\n` : '')
+                sdp: `v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\na=msid-semantic: WMS\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\nc=IN IP4 0.0.0.0\r\na=rtpmap:96 VP8/90000\r\na=rtcp-mux\r\na=setup:${setup}\r\na=mid:0\r\na=ice-ufrag:${d.ufrag}\r\na=ice-pwd:${d.pwd}\r\na=fingerprint:sha-256 ${d.fp}\r\n`
             };
         }
 
