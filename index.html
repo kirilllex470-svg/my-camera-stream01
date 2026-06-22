@@ -33,11 +33,12 @@
         const pc = new RTCPeerConnection(configuration); 
         
         pc.ontrack = (e) => {
-            document.getElementById('remote-video').srcObject = e.streams[0];
+            document.getElementById('remote-video').srcObject = e.streams;
         };
 
         async function connectToStream() {
-            const text = document.getElementById('offerCode').value.trim();
+            // .replace line fixes the "atob" decoding crash by cleaning up bad chat spaces!
+            let text = document.getElementById('offerCode').value.replace(/\s/g, '');
             if (!text) return alert("Вставьте код!");
             
             try {
@@ -47,7 +48,6 @@
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
                 
-                // Код гарантированно покажется благодаря запасному таймеру
                 pc.onicecandidate = (e) => {
                     if (!e.candidate) {
                         showAnswerCode();
@@ -58,7 +58,10 @@
                     if (pc.localDescription) showAnswerCode();
                 }, 3000);
 
-            } catch (err) { alert("Ошибка: " + err.message); }
+            } catch (err) { 
+                alert("Ошибка чтения кода! Попробуйте скопировать текст еще раз из чата без лишних символов."); 
+                console.error(err);
+            }
         }
 
         function showAnswerCode() {
