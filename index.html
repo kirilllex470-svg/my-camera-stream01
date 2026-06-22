@@ -6,7 +6,7 @@
     <style>
         body { font-family: Arial, sans-serif; text-align: center; background: #111; color: white; padding: 20px; }
         video { width: 640px; height: 480px; background: #000; border-radius: 8px; margin-top: 20px; border: 2px solid #333; }
-        textarea { width: 95%; height: 35px; background: #333; color: #00ff00; border: 1px solid #555; padding: 8px; font-size: 14px; resize: none; }
+        textarea { width: 95%; height: 60px; background: #333; color: #00ff00; border: 1px solid #555; padding: 8px; font-size: 12px; word-break: break-all; }
         button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #00ff00; border: none; border-radius: 5px; font-weight: bold; margin-top: 10px; color: black; }
         .step { background: #222; padding: 15px; margin: 15px auto; max-width: 600px; border-radius: 8px; text-align: left; }
     </style>
@@ -16,20 +16,19 @@
     <h1>Подключение к трансляции</h1>
 
     <div class="step">
-        <label><strong>Шаг 1:</strong> Вставьте маленький код от стримера:</label>
+        <label><strong>Шаг 1:</strong> Вставьте код от стримера:</label>
         <textarea id="offerCode" placeholder="Вставьте код сюда..."></textarea>
         <button onclick="connectToStream()">Создать ответ</button>
     </div>
 
     <div class="step" id="answerBox" style="display:none;">
-        <label><strong>Шаг 2:</strong> Скопируйте этот короткий ответ и отправьте стримеру:</label>
+        <label><strong>Шаг 2:</strong> Скопируйте этот ответ и отправьте стримеру:</label>
         <textarea id="answerCode" readonly onclick="this.select()"></textarea>
     </div>
 
     <video id="remote-video" autoplay playsinline controls></video>
 
     <script>
-        // Fixed: Removed server options here too
         const pc = new RTCPeerConnection(); 
         
         pc.ontrack = (e) => {
@@ -40,23 +39,21 @@
             const text = document.getElementById('offerCode').value.trim();
             if (!text) return alert("Вставьте код!");
             
-            const [ufrag, pwd] = text.split('_');
-            const sdp = `v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\na=ice-ufrag:${ufrag}\r\na=ice-pwd:${pwd}\r\nm=video 9 RTP/AVP 96\r\nc=IN IP4 0.0.0.0\r\na=rtpmap:96 H264/90000\r\n`;
-            
-            await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: sdp }));
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            
-            pc.onicecandidate = (e) => {
-                if (!e.candidate) {
-                    const lines = pc.localDescription.sdp.split('\r\n');
-                    const aufrag = lines.find(l => l.startsWith('a=ice-ufrag:')).split(':');
-                    const apwd = lines.find(l => l.startsWith('a=ice-pwd:')).split(':');
-                    
-                    document.getElementById('answerCode').value = `${aufrag[1]}_${apwd[1]}`;
-                    document.getElementById('answerBox').style.display = 'block';
-                }
-            };
+            try {
+                const parsed = JSON.parse(atob(text));
+                await pc.setRemoteDescription(new RTCSessionDescription(parsed));
+                
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                
+                pc.onicecandidate = (e) => {
+                    if (!e.candidate) {
+                        const compressedAnswer = btoa(JSON.stringify(pc.localDescription));
+                        document.getElementById('answerCode').value = compressedAnswer;
+                        document.getElementById('answerBox').style.display = 'block';
+                    }
+                };
+            } catch (err) { alert("Ошибка: " + err.message); }
         }
     </script>
 </body>
