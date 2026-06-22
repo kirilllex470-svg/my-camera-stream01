@@ -29,15 +29,14 @@
     <video id="remote-video" autoplay playsinline controls></video>
 
     <script>
-        const configuration = { iceServers: [{ urls: 'stun:://google.com' }] };
-        const pc = new RTCPeerConnection(configuration); 
+        // Fixed: Completely blank constructor here too
+        const pc = new RTCPeerConnection(); 
         
         pc.ontrack = (e) => {
             document.getElementById('remote-video').srcObject = e.streams;
         };
 
         async function connectToStream() {
-            // .replace line fixes the "atob" decoding crash by cleaning up bad chat spaces!
             let text = document.getElementById('offerCode').value.replace(/\s/g, '');
             if (!text) return alert("Вставьте код!");
             
@@ -56,12 +55,9 @@
 
                 setTimeout(() => {
                     if (pc.localDescription) showAnswerCode();
-                }, 3000);
+                }, 1500);
 
-            } catch (err) { 
-                alert("Ошибка чтения кода! Попробуйте скопировать текст еще раз из чата без лишних символов."); 
-                console.error(err);
-            }
+            } catch (err) { alert("Ошибка: " + err.message); }
         }
 
         function showAnswerCode() {
