@@ -2,43 +2,75 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Просмотр без кодов</title>
+    <title>Моя Онлайн Трансляция</title>
     <script src="https://jsdelivr.net"></script>
     <style>
-        body { font-family: Arial; text-align: center; background: #111; color: white; padding: 20px; }
-        video { width: 640px; height: 480px; background: #000; border-radius: 8px; margin-top: 20px; border: 2px solid #333; }
-        .box { font-size: 18px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 600px; text-align: center; }
-        button { padding: 12px 25px; font-size: 18px; cursor: pointer; background: #00ff00; border: none; border-radius: 5px; font-weight: bold; }
+        body { font-family: Arial, sans-serif; text-align: center; background: #111; color: white; padding: 20px; }
+        video { width: 90%; max-width: 640px; background: #000; border-radius: 8px; margin-top: 20px; border: 2px solid #333; }
+        .box { font-size: 18px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 600px; }
+        button { padding: 12px 25px; font-size: 18px; cursor: pointer; background: #00ff00; border: none; border-radius: 5px; font-weight: bold; color: black; margin-top: 15px; }
     </style>
 </head>
 <body>
 
-    <h1>Просмотр трансляции</h1>
-    <div id="status" class="box">Нажмите кнопку для подключения</div>
+    <h1>Онлайн Трансляция</h1>
+    <div id="status" class="box">Определяем режим работы...</div>
     
-    <!-- Кнопка нужна, так как браузеры запрещают включать звук без клика пользователя -->
-    <button onclick="connect()">Подключиться к трансляции</button>
-    <br>
-    <video id="remote-video" autoplay playsinline controls></video>
+    <div id="video-container"></div>
 
     <script>
-        function connect() {
-            document.getElementById('status').innerText = "Ищем трансляцию в сети...";
+        // Придумайте СВОЁ секретное слово комнаты (замените это)
+        const ROOM_ID = "my-camera-room-xyz-777"; 
+
+        // Проверяем адресную строку: если в конце написано ?stream, то вы админ
+        const isStreamer = window.location.search.includes('stream');
+
+        if (isStreamer) {
+            // --- РЕЖИМ СТРИМЕРА ---
+            document.getElementById('status').innerText = "Включаем вашу камеру...";
+            
+            // Создаем тег для вашего видео
+            document.getElementById('video-container').innerHTML = '<video id="my-video" autoplay muted playsinline></video>';
+
+            navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
+                document.getElementById('my-video').srcObject = stream;
+                document.getElementById('status').innerText = "Подключаемся к сети...";
+
+                const peer = new Peer(ROOM_ID);
+
+                peer.on('open', () => {
+                    document.getElementById('status').innerHTML = "🟢 В ЭФИРЕ!<br>Друзья могут просто переходить по вашей обычной ссылке.";
+                });
+
+                peer.on('call', (call) => {
+                    call.answer(stream); // Автоматически отдаем видео зрителю без кодов
+                    document.getElementById('status').innerText = "🟢 Зритель подключился!";
+                });
+            }).catch(err => {
+                document.getElementById('status').innerText = "Ошибка камеры: " + err.message;
+            });
+
+        } else {
+            // --- РЕЖИМ ЗРИТЕЛЯ ---
+            document.getElementById('status').innerHTML = "Вы вошли как зритель.<br><button onclick='connectToStream()'>Смотреть трансляцию</button>";
+            document.getElementById('video-container').innerHTML = '<video id="remote-video" autoplay playsinline controls></video>';
+        }
+
+        function connectToStream() {
+            document.getElementById('status').innerText = "Подключаемся к камере друга...";
             const peer = new Peer();
 
             peer.on('open', () => {
-                // Подключаемся к той же комнате. 
-                // ВАЖНО: Тут должно быть точь-в-точь то же слово, что и в streamer.html!
-                const call = peer.call('my-unique-camera-room-00000', new MediaStream());
+                const call = peer.call(ROOM_ID, new MediaStream());
 
                 call.on('stream', (remoteStream) => {
                     document.getElementById('remote-video').srcObject = remoteStream;
-                    document.getElementById('status').innerText = "🟢 Вы в эфире! Приятного просмотра.";
+                    document.getElementById('status').innerText = "🟢 Вы смотрите прямой эфир!";
                 });
             });
 
-            peer.on('error', (err) => {
-                document.getElementById('status').innerText = "Не удалось подключиться. Убедитесь, что стример включил камеру.";
+            peer.on('error', () => {
+                document.getElementById('status').innerText = "🔴 Стример еще не включил трансляцию или комната занята.";
             });
         }
     </script>
