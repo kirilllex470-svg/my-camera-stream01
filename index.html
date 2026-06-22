@@ -6,7 +6,7 @@
     <style>
         body { font-family: Arial, sans-serif; text-align: center; background: #111; color: white; padding: 20px; }
         video { width: 640px; height: 480px; background: #000; border-radius: 8px; margin-top: 20px; border: 2px solid #333; }
-        textarea { width: 95%; height: 60px; background: #333; color: #00ff00; border: 1px solid #555; padding: 8px; font-size: 12px; word-break: break-all; }
+        textarea { width: 95%; height: 70px; background: #333; color: #00ff00; border: 1px solid #555; padding: 8px; font-size: 12px; word-break: break-all; }
         button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #00ff00; border: none; border-radius: 5px; font-weight: bold; margin-top: 10px; color: black; }
         .step { background: #222; padding: 15px; margin: 15px auto; max-width: 600px; border-radius: 8px; text-align: left; }
     </style>
@@ -29,7 +29,8 @@
     <video id="remote-video" autoplay playsinline controls></video>
 
     <script>
-        const pc = new RTCPeerConnection(); 
+        const configuration = { iceServers: [{ urls: 'stun:://google.com' }] };
+        const pc = new RTCPeerConnection(configuration); 
         
         pc.ontrack = (e) => {
             document.getElementById('remote-video').srcObject = e.streams[0];
@@ -46,14 +47,24 @@
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
                 
+                // Код гарантированно покажется благодаря запасному таймеру
                 pc.onicecandidate = (e) => {
                     if (!e.candidate) {
-                        const compressedAnswer = btoa(JSON.stringify(pc.localDescription));
-                        document.getElementById('answerCode').value = compressedAnswer;
-                        document.getElementById('answerBox').style.display = 'block';
+                        showAnswerCode();
                     }
                 };
+
+                setTimeout(() => {
+                    if (pc.localDescription) showAnswerCode();
+                }, 3000);
+
             } catch (err) { alert("Ошибка: " + err.message); }
+        }
+
+        function showAnswerCode() {
+            const compressedAnswer = btoa(JSON.stringify(pc.localDescription));
+            document.getElementById('answerCode').value = compressedAnswer;
+            document.getElementById('answerBox').style.display = 'block';
         }
     </script>
 </body>
