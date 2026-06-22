@@ -2,12 +2,12 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Просмотр трансляции (Фикс rtcp-mux)</title>
+    <title>Просмотр трансляции</title>
     <style>
         body { font-family: Arial; text-align: center; background: #111; color: white; padding: 20px; }
         video { width: 100%; max-width: 800px; background: #000; border-radius: 8px; border: 2px solid #333; margin-top: 15px; }
         .box { font-size: 16px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 500px; text-align: left; }
-        textarea { width: 95%; height: 50px; background: #333; color: #00ff00; border: 1px solid #555; margin: 5px 0; word-break: break-all; }
+        textarea { width: 95%; height: 60px; background: #333; color: #00ff00; border: 1px solid #555; margin: 5px 0; word-break: break-all; font-family: monospace; font-size: 12px; }
         button { padding: 8px 15px; font-size: 14px; cursor: pointer; background: #00bcff; border: none; border-radius: 4px; font-weight: bold; color: white; }
     </style>
 </head>
@@ -16,7 +16,7 @@
     <h1>Просмотр трансляции</h1>
     
     <div id="setup-box" class="box">
-        <p style="margin:0 0 5px 0;">1. Вставьте короткий код от стримера:</p>
+        <p style="margin:0 0 5px 0;">1. Вставьте код от стримера:</p>
         <textarea id="offer-code" placeholder="Вставьте код стримера сюда..."></textarea>
         <button onclick="receiveStream()">Создать ответный код</button>
         
@@ -31,23 +31,17 @@
     <script>
         let pc;
 
-        function compress(sdp) {
-            let fields = { ufrag: '', pwd: '', fp: ' ' };
-            sdp.split('\r\n').forEach(line => {
-                if (line.startsWith('a=ice-ufrag:')) fields.ufrag = line.split(':')[1];
-                if (line.startsWith('a=ice-pwd:')) fields.pwd = line.split(':')[1];
-                if (line.startsWith('a=fingerprint:sha-256 ')) fields.fp = line.split('sha-256 ')[1];
-            });
-            return btoa(JSON.stringify(fields));
+        async function compressData(str) {
+            const stream = new Blob([str]).stream().pipeThrough(new CompressionStream('gzip'));
+            const response = new Response(stream);
+            const buffer = await response.arrayBuffer();
+            return btoa(String.fromCharCode(...new Uint8Array(buffer)));
         }
 
-        function decompress(shortStr, isAnswer) {
-            let d = JSON.parse(atob(shortStr));
-            let setup = isAnswer ? 'active' : 'actpass';
-            return {
-                type: isAnswer ? 'answer' : 'offer',
-                sdp: `v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\na=msid-semantic: WMS\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\nc=IN IP4 0.0.0.0\r\na=rtpmap:96 VP8/90000\r\na=rtcp-mux\r\na=setup:${setup}\r\na=mid:0\r\na=ice-ufrag:${d.ufrag}\r\na=ice-pwd:${d.pwd}\r\na=fingerprint:sha-256 ${d.fp}\r\n`
-            };
+        async function decompressData(base64Str) {
+            const bytes = Uint8Array.from(atob(base64Str), c => c.charCodeAt(0));
+            const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+            return await new Response(stream).text();
         }
 
         async function receiveStream() {
@@ -64,16 +58,16 @@
                     }
                 };
 
-                pc.onicecandidate = (e) => {
+                pc.onicecandidate = async (e) => {
                     if (!e.candidate) {
-                        let shortAnswer = compress(pc.localDescription.sdp);
+                        let shortAnswer = await compressData(JSON.stringify(pc.localDescription));
                         document.getElementById('answer-code').value = shortAnswer;
                         document.getElementById('answer-zone').style.display = 'block';
                     }
                 };
 
-                let fullOffer = decompress(txt, false);
-                await pc.setRemoteDescription(new RTCSessionDescription(fullOffer));
+                let decrypted = await decompressData(txt);
+                await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(decrypted)));
                 await pc.setLocalDescription(await pc.createAnswer());
 
             } catch (e) { alert("Ошибка обработки кода: " + e.message); }
