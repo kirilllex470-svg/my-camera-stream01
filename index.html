@@ -29,7 +29,7 @@
             peer.on('open', () => {
                 // Подключаемся к той же комнате. 
                 // ВАЖНО: Тут должно быть точь-в-точь то же слово, что и в streamer.html!
-                const call = peer.call('my-unique-camera-room-2026', new MediaStream());
+                const call = peer.call('my-unique-camera-room-00000', new MediaStream());
 
                 call.on('stream', (remoteStream) => {
                     document.getElementById('remote-video').srcObject = remoteStream;
