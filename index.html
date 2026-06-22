@@ -29,7 +29,8 @@
     <video id="remote-video" autoplay playsinline controls></video>
 
     <script>
-        const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:://google.com' }] });
+        // Fixed: Removed server options here too
+        const pc = new RTCPeerConnection(); 
         
         pc.ontrack = (e) => {
             document.getElementById('remote-video').srcObject = e.streams[0];
@@ -49,10 +50,10 @@
             pc.onicecandidate = (e) => {
                 if (!e.candidate) {
                     const lines = pc.localDescription.sdp.split('\r\n');
-                    const aufrag = lines.find(l => l.startsWith('a=ice-ufrag:')).split(':')[1];
-                    const apwd = lines.find(l => l.startsWith('a=ice-pwd:')).split(':')[1];
+                    const aufrag = lines.find(l => l.startsWith('a=ice-ufrag:')).split(':');
+                    const apwd = lines.find(l => l.startsWith('a=ice-pwd:')).split(':');
                     
-                    document.getElementById('answerCode').value = `${aufrag}_${apwd}`;
+                    document.getElementById('answerCode').value = `${aufrag[1]}_${apwd[1]}`;
                     document.getElementById('answerBox').style.display = 'block';
                 }
             };
