@@ -5,65 +5,80 @@
     <title>Просмотр трансляции</title>
     <style>
         body { font-family: Arial; text-align: center; background: #111; color: white; padding: 20px; }
-        video { width: 640px; height: 480px; background: #000; border-radius: 8px; margin-top: 20px; border: 2px solid #333; }
-        textarea { width: 90%; height: 100px; background: #333; color: #00ff00; border: 1px solid #555; padding: 10px; margin-top: 10px; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #00ff00; border: none; border-radius: 5px; font-weight: bold; margin-top: 10px; }
-        .step { background: #222; padding: 15px; margin: 15px auto; max-width: 700px; border-radius: 8px; text-align: left; }
+        video { width: 100%; max-width: 800px; background: #000; border-radius: 8px; border: 2px solid #333; margin-top: 15px; }
+        .box { font-size: 16px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 500px; text-align: left; }
+        textarea { width: 95%; height: 50px; background: #333; color: #00ff00; border: 1px solid #555; margin: 5px 0; word-break: break-all; }
+        button { padding: 8px 15px; font-size: 14px; cursor: pointer; background: #00bcff; border: none; border-radius: 4px; font-weight: bold; color: white; }
     </style>
 </head>
 <body>
 
-    <h1>Подключение к трансляции</h1>
-
-    <div class="step">
-        <label><strong>Шаг 1:</strong> Вставьте длинный код, который вам прислал стример:</label>
-        <textarea id="offerCode" placeholder="Вставьте код сюда..."></textarea>
-        <button onclick="connectToStream()">Подключиться к камере</button>
-    </div>
-
-    <div class="step" id="answerBox" style="display:none;">
-        <label><strong>Шаг 2:</strong> Скопируйте этот ответный код и отправьте его обратно стримеру:</label>
-        <textarea id="answerCode" readonly onclick="this.select()"></textarea>
+    <h1>Просмотр трансляции</h1>
+    
+    <div id="setup-box" class="box">
+        <p style="margin:0 0 5px 0;">1. Вставьте короткий код от стримера:</p>
+        <textarea id="offer-code" placeholder="Вставьте код стримера сюда..."></textarea>
+        <button onclick="receiveStream()">Создать ответный код</button>
+        
+        <div id="answer-zone" style="display:none; margin-top:15px;">
+            <p style="margin:0 0 5px 0; color:#00ff00;">2. Скопируйте этот ответ и отправьте стримеру:</p>
+            <textarea id="answer-code" readonly onclick="this.select()"></textarea>
+        </div>
     </div>
 
     <video id="remote-video" autoplay playsinline controls></video>
 
     <script>
-        const pc = new RTCPeerConnection();
+        let pc;
 
-        // Когда от стримера прилетает видео/аудио поток, выводим его в тег <video>
-        pc.ontrack = (event) => {
-            const remoteVideo = document.getElementById('remote-video');
-            if (!remoteVideo.srcObject) {
-                remoteVideo.srcObject = event.streams[0];
-            }
-        };
+        function compress(sdp) {
+            let fields = { ufrag: '', pwd: '', fp: '', ssrc: '' };
+            sdp.split('\r\n').forEach(line => {
+                if (line.startsWith('a=ice-ufrag:')) fields.ufrag = line.split(':')[1];
+                if (line.startsWith('a=ice-pwd:')) fields.pwd = line.split(':')[1];
+                if (line.startsWith('a=fingerprint:sha-256 ')) fields.fp = line.split('sha-256 ')[1];
+                if (line.startsWith('a=ssrc:') && line.includes('cname:')) fields.ssrc = line.split(' ')[0].split(':')[1];
+            });
+            return btoa(JSON.stringify(fields));
+        }
 
-        async function connectToStream() {
-            const offerText = document.getElementById('offerCode').value.trim();
-            if (!offerText) return alert("Пожалуйста, вставьте код!");
+        function decompress(shortStr, isAnswer) {
+            let d = JSON.parse(atob(shortStr));
+            let setup = isAnswer ? 'active' : 'actpass';
+            return {
+                type: isAnswer ? 'answer' : 'offer',
+                sdp: `v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\na=msid-semantic: WMS\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\nc=IN IP4 0.0.0.0\r\na=rtpmap:96 VP8/90000\r\na=setup:${setup}\r\na=mid:0\r\na=ice-ufrag:${d.ufrag}\r\na=ice-pwd:${d.pwd}\r\na=fingerprint:sha-256 ${d.fp}\r\n` + (d.ssrc ? `a=ssrc:${d.ssrc} cname:stream\r\n` : '')
+            };
+        }
+
+        async function receiveStream() {
+            let txt = document.getElementById('offer-code').value.trim();
+            if(!txt) return alert("Вставьте код!");
 
             try {
-                // Декодируем полученный текст обратно в настройки WebRTC
-                const offerDesc = JSON.parse(atob(offerText));
-                await pc.setRemoteDescription(new RTCSessionDescription(offerDesc));
+                pc = new RTCPeerConnection({ iceServers: [] });
 
-                // Создаем ответный код (Answer)
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
+                pc.ontrack = (event) => {
+                    if (event.streams && event.streams[0]) {
+                        document.getElementById('remote-video').srcObject = event.streams[0];
+                        document.getElementById('setup-box').style.display = 'none';
+                    }
+                };
 
-                // Ждем секунду и показываем ответный код
-                setTimeout(() => {
-                    const base64Answer = btoa(JSON.stringify(pc.localDescription));
-                    document.getElementById('answerCode').value = base64Answer;
-                    document.getElementById('answerBox').style.display = 'block';
-                }, 1000);
+                pc.onicecandidate = (e) => {
+                    if (!e.candidate) {
+                        let shortAnswer = compress(pc.localDescription.sdp);
+                        document.getElementById('answer-code').value = shortAnswer;
+                        document.getElementById('answer-zone').style.display = 'block';
+                    }
+                };
 
-            } catch (err) {
-                alert("Ошибка при чтении кода: " + err.message);
-            }
+                let fullOffer = decompress(txt, false);
+                await pc.setRemoteDescription(new RTCSessionDescription(fullOffer));
+                await pc.setLocalDescription(await pc.createAnswer());
+
+            } catch (e) { alert("Ошибка обработки кода: " + e.message); }
         }
     </script>
-
 </body>
 </html>
